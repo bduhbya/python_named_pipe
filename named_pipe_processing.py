@@ -1,6 +1,7 @@
 import time
 import sys
 import win32pipe, win32file, pywintypes
+import threading
 
 
 def pipe_server():
@@ -31,11 +32,14 @@ def pipe_server():
         win32file.CloseHandle(pipe)
 
 
-def pipe_client():
+def pipe_client(stop_event):
     print("pipe client")
     quit = False
+    if stop_event is None:
+        print("stop_event is None")
+        return
 
-    while not quit:
+    while not quit and not stop_event.is_set():
         try:
             handle = win32file.CreateFile(
                 r'\\.\pipe\Foo',
@@ -62,11 +66,12 @@ def pipe_client():
 
 
 if __name__ == '__main__':
+    stop_event = threading.Event()
     if len(sys.argv) < 2:
         print("need s or c as argument")
     elif sys.argv[1] == "s":
         pipe_server()
     elif sys.argv[1] == "c":
-        pipe_client()
+        pipe_client(stop_event=stop_event)
     else:
         print(f"no can do: {sys.argv[1]}")
