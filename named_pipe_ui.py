@@ -46,6 +46,21 @@ def on_close():
 
     root.destroy()
 
+def send_pipe_message(message: str):
+    if not serverCreated:
+        create_pipe_entity()
+
+    if message is None or message == "":
+        print("No message to send")
+        return
+    
+    print("Sending message to pipe: " + message)
+    send_message(message)
+
+def send_server_entry():
+    send_pipe_message(serverEntry.get())
+    serverEntry.delete(0, 'end')
+
 def toggle_pipe_client():
     if not serverCreated:
         create_pipe_entity()
@@ -67,10 +82,13 @@ def toggle_pipe_client():
 tk.Label(root, text='Custom Pipe Text').pack()
 # tk.Label(root, text='Custom Pipe Text').grid(row=0)
 # tk.Label(root, text='Last Name').grid(row=1)
-e1 = tk.Entry(root)
+serverEntry = tk.Entry(root)
+send_message_button = tk.Button(root, text="Send Message",
+                                command=send_server_entry)
+send_message_button.pack()
 # e2 = tk.Entry(root)
-e1.pack()
-# e1.grid(row=0, column=1)
+serverEntry.pack()
+# serverEntry.grid(row=0, column=1)
 # e2.grid(row=1, column=1)
 
 # Add a button
