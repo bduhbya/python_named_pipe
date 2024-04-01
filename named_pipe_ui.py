@@ -1,5 +1,5 @@
 import tkinter as tk
-from named_pipe_processing import pipe_client
+from named_pipe_processing import pipe_client, create_pipe, testServerName, send_message, close_pipe
 import threading
 # Create the main window
 root = tk.Tk()
@@ -11,7 +11,45 @@ stopClientTtext = "Stop Client"
 
 stop_client = threading.Event()
 client_thread = None
+
+serverCreated = False
+
+def create_pipe_entity():
+    global serverCreated
+    if serverCreated:
+        return
+    serverCreated = create_pipe(testServerName)
+    print("Creating server")
+    if serverCreated:
+        print("pipe created")
+    else:
+        print("pipe not created")
+        # exit(1)
+
+def stop_pipe_client():
+    print("Stopping client thread")
+    global stop_client
+    stop_client.set()
+    global client_thread
+    if client_thread is not None:
+        client_thread.join()
+        client_thread = None
+
+def on_close():
+    print("Closing window")
+    if serverCreated:
+        send_message("exit")
+        close_pipe()
+
+    if client_thread is not None:
+        stop_pipe_client()
+
+    root.destroy()
+
 def toggle_pipe_client():
+    if not serverCreated:
+        create_pipe_entity()
+
     global client_thread
     global stop_client
     global startClientText
@@ -23,11 +61,8 @@ def toggle_pipe_client():
         client_thread.start()
         toggle_client_button.config(text=stopClientTtext)
     else:
-        print("Stopping client thread")
-        stop_client.set()
-        client_thread.join()
+        stop_pipe_client()
         toggle_client_button.config(text=startClientText)
-        client_thread = None
 
 tk.Label(root, text='Custom Pipe Text').pack()
 # tk.Label(root, text='Custom Pipe Text').grid(row=0)
@@ -42,8 +77,9 @@ e1.pack()
 toggle_client_button = tk.Button(root, text=startClientText, command=toggle_pipe_client)
 toggle_client_button.pack()
 
-msgReceived = tk.Message(root, text="Message Received", width=300, bg='white', fg='black', relief=tk.SUNKEN)
+msgReceived = tk.Message(root, width=300, bg='white', fg='black', relief=tk.SUNKEN)
 msgReceived.pack()
 
+root.protocol("WM_DELETE_WINDOW", on_close)
 # Start the event loop
 root.mainloop()
