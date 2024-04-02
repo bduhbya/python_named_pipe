@@ -14,6 +14,8 @@ client_thread = None
 
 serverCreated = False
 
+dataReceived = ""
+
 def create_pipe_entity():
     global serverCreated
     if serverCreated:
@@ -71,13 +73,19 @@ def toggle_pipe_client():
     global stopClientTtext
     global toggle_client_button
     if client_thread is None:
-        client_thread = threading.Thread(target=pipe_client, args=(stop_client, ))
+        client_thread = threading.Thread(target=pipe_client, args=(stop_client, client_callback, ))
         print("Starting client thread")
         client_thread.start()
         toggle_client_button.config(text=stopClientTtext)
     else:
         stop_pipe_client()
         toggle_client_button.config(text=startClientText)
+
+def client_callback(response: str):
+    global dataReceived
+    dataReceived += response
+    msgReceived.config(text=dataReceived)
+
 
 tk.Label(root, text='Custom Pipe Text').pack()
 # tk.Label(root, text='Custom Pipe Text').grid(row=0)

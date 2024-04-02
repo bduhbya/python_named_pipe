@@ -2,6 +2,9 @@ import time
 import sys
 import win32pipe, win32file, pywintypes
 import threading
+from typing import Callable
+
+ClientCallbackType = Callable[[str], None]
 
 pipeName = None
 namedPipe = None
@@ -36,13 +39,6 @@ def pipe_server_test():
     global namedPipe
     global pipeName
     count = 0
-    # pipe = win32pipe.CreateNamedPipe(
-    #     r'\\.\pipe\Foo',
-    #     win32pipe.PIPE_ACCESS_DUPLEX,
-    #     win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
-    #     1, 65536, 65536,
-    #     0,
-    #     None)
     try:
         print("waiting for client to connect pipe: " + pipeName)
         win32pipe.ConnectNamedPipe(namedPipe, None)
@@ -73,7 +69,7 @@ def send_message(message: str):
     finally:
         print("finally")
 
-def pipe_client(stop_event):
+def pipe_client(stop_event, callback: ClientCallbackType):
     print("pipe client")
     quit = False
     if stop_event is None:
@@ -103,6 +99,8 @@ def pipe_client(stop_event):
                 _, available, _ = win32pipe.PeekNamedPipe(handle, 0)
                 if available:
                     resp = win32file.ReadFile(handle, 64*1024)
+                    if callback is not None:
+                        callback(str(resp[1], 'utf-8'))
                     print(f"message: {resp}")
                 else:
                     time.sleep(1)  # Sleep for a short time to prevent busy waiting
