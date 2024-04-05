@@ -114,18 +114,18 @@ sendMessageFrame.pack()
 sendMessageFrame.grid_columnconfigure(0, minsize=200)
 
 # Move the send message button and the server entry to the sendMessageFrame
-send_message_button = tk.Button(
+sendMessageButton = tk.Button(
     sendMessageFrame, text="Send Message", command=send_server_entry
 )
-send_message_button.grid(row=0, column=0, sticky="w")
+sendMessageButton.grid(row=0, column=0, sticky="w")
 serverEntry = tk.Entry(sendMessageFrame)
 serverEntry.grid(row=1, column=0, sticky="w")
 
 # Move the pipe name label to the right of the sendMessageFrame
-send_pipe_name_frame = tk.LabelFrame(sendMessageFrame, text="Send Pipe Name: ", bd=1)
-send_pipe_name_frame.grid(row=0, column=1, sticky="e")
-send_pipe_name_label = tk.Label(send_pipe_name_frame, text=testServerName)
-send_pipe_name_label.pack()
+sendPipeNameFrame = tk.LabelFrame(sendMessageFrame, text="Send Pipe Name: ", bd=1)
+sendPipeNameFrame.grid(row=0, column=1, sticky="e")
+sendPipeNameLabel = tk.Label(sendPipeNameFrame, text=testServerName)
+sendPipeNameLabel.pack()
 
 # Create a clientMessageFrame for the send message button and the server entry
 clientMessageFrame = tk.Frame(root)
