@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import simpledialog
 from named_pipe_processing import (
     pipe_client,
     create_pipe,
@@ -13,10 +14,19 @@ stopClientTtext = "Stop Client"
 
 stopClient = threading.Event()
 clientThread = None
-
+clientPipeName = testServerName
+dataReceived = ""
 serverCreated = False
 
-dataReceived = ""
+sendPipeName = testServerName
+
+
+def set_send_pipe_name():
+    global sendPipeName
+    new_name = simpledialog.askstring("Input", "Enter the new pipe name:")
+    if new_name is not None:  # If the user didn't cancel the dialog
+        sendPipeName = new_name
+        sendPipeNameLabel.config(text=sendPipeName)
 
 
 def create_pipe_entity():
@@ -126,6 +136,11 @@ sendPipeNameFrame = tk.LabelFrame(sendMessageFrame, text="Send Pipe Name: ", bd=
 sendPipeNameFrame.grid(row=0, column=1, sticky="e")
 sendPipeNameLabel = tk.Label(sendPipeNameFrame, text=testServerName)
 sendPipeNameLabel.pack()
+
+changePipeNameButton = tk.Button(
+    sendPipeNameFrame, text="Set Pipe Name", command=set_send_pipe_name
+)
+changePipeNameButton.pack()
 
 # Create a clientMessageFrame for the send message button and the server entry
 clientMessageFrame = tk.Frame(root)
