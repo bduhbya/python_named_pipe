@@ -123,22 +123,26 @@ sendMessageFrame.pack()
 # Add space between column 0 and column 1
 sendMessageFrame.grid_columnconfigure(0, minsize=200)
 
-# Move the send message button and the server entry to the sendMessageFrame
-sendMessageButton = tk.Button(
-    sendMessageFrame, text="Send Message", command=send_server_entry
+sendPipeMessageLabelFrame = tk.LabelFrame(
+    sendMessageFrame, text="Send Pipe Message: ", bd=1
 )
-sendMessageButton.grid(row=0, column=0, sticky="w")
-serverEntry = tk.Entry(sendMessageFrame)
-serverEntry.grid(row=1, column=0, sticky="w")
+sendPipeMessageLabelFrame.grid(row=0, column=0, sticky="w")
 
-# Move the pipe name label to the right of the sendMessageFrame
-sendPipeNameFrame = tk.LabelFrame(sendMessageFrame, text="Send Pipe Name: ", bd=1)
-sendPipeNameFrame.grid(row=0, column=1, sticky="e")
-sendPipeNameLabel = tk.Label(sendPipeNameFrame, text=testServerName)
+sendMessageButton = tk.Button(
+    sendPipeMessageLabelFrame, text="Send Message", command=send_server_entry
+)
+
+sendMessageButton.pack()
+serverEntry = tk.Entry(sendPipeMessageLabelFrame)
+serverEntry.pack()
+
+sendPipeNameLabelFrame = tk.LabelFrame(sendMessageFrame, text="Send Pipe Name: ", bd=1)
+sendPipeNameLabelFrame.grid(row=0, column=1, sticky="e")
+sendPipeNameLabel = tk.Label(sendPipeNameLabelFrame, text=testServerName)
 sendPipeNameLabel.pack()
 
 changePipeNameButton = tk.Button(
-    sendPipeNameFrame, text="Set Pipe Name", command=set_send_pipe_name
+    sendPipeNameLabelFrame, text="Set Pipe Name", command=set_send_pipe_name
 )
 changePipeNameButton.pack()
 
