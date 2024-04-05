@@ -11,8 +11,8 @@ import threading
 startClientText = "Start Client"
 stopClientTtext = "Stop Client"
 
-stop_client = threading.Event()
-client_thread = None
+stopClient = threading.Event()
+clientThread = None
 
 serverCreated = False
 
@@ -34,12 +34,12 @@ def create_pipe_entity():
 
 def stop_pipe_client():
     print("Stopping client thread")
-    global stop_client
-    stop_client.set()
-    global client_thread
-    if client_thread is not None:
-        client_thread.join()
-        client_thread = None
+    global stopClient
+    stopClient.set()
+    global clientThread
+    if clientThread is not None:
+        clientThread.join()
+        clientThread = None
 
 
 def on_close():
@@ -48,7 +48,7 @@ def on_close():
         send_message("exit")
         close_pipe()
 
-    if client_thread is not None:
+    if clientThread is not None:
         stop_pipe_client()
 
     root.destroy()
@@ -75,25 +75,25 @@ def toggle_pipe_client():
     if not serverCreated:
         create_pipe_entity()
 
-    global client_thread
-    global stop_client
+    global clientThread
+    global stopClient
     global startClientText
     global stopClientTtext
-    global toggle_client_button
-    if client_thread is None:
-        client_thread = threading.Thread(
+    global toggleClientButton
+    if clientThread is None:
+        clientThread = threading.Thread(
             target=pipe_client,
             args=(
-                stop_client,
+                stopClient,
                 client_callback,
             ),
         )
         print("Starting client thread")
-        client_thread.start()
-        toggle_client_button.config(text=stopClientTtext)
+        clientThread.start()
+        toggleClientButton.config(text=stopClientTtext)
     else:
         stop_pipe_client()
-        toggle_client_button.config(text=startClientText)
+        toggleClientButton.config(text=startClientText)
 
 
 def client_callback(response: str):
@@ -127,9 +127,16 @@ send_pipe_name_frame.grid(row=0, column=1, sticky="e")
 send_pipe_name_label = tk.Label(send_pipe_name_frame, text=testServerName)
 send_pipe_name_label.pack()
 
+# Create a clientMessageFrame for the send message button and the server entry
+clientMessageFrame = tk.Frame(root)
+clientMessageFrame.pack()
+# Add space between column 0 and column 1
+clientMessageFrame.grid_columnconfigure(0, minsize=200)
 # Add toggle client button
-toggle_client_button = tk.Button(root, text=startClientText, command=toggle_pipe_client)
-toggle_client_button.pack()
+toggleClientButton = tk.Button(
+    clientMessageFrame, text=startClientText, command=toggle_pipe_client
+)
+toggleClientButton.grid(row=0, column=0, sticky="w")
 
 msgReceived = tk.Message(root, width=300, bg="white", fg="black", relief=tk.SUNKEN)
 msgReceived.pack()
