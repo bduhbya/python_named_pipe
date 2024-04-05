@@ -138,8 +138,15 @@ toggleClientButton = tk.Button(
 )
 toggleClientButton.grid(row=0, column=0, sticky="w")
 
-msgReceived = tk.Message(root, width=300, bg="white", fg="black", relief=tk.SUNKEN)
-msgReceived.pack()
+msgReceived = tk.Message(
+    clientMessageFrame, width=190, bg="white", fg="black", relief=tk.SUNKEN
+)
+msgReceived.grid(row=1, column=0, sticky="w")
+
+clientPipeNameFrame = tk.LabelFrame(clientMessageFrame, text="Client Pipe Name: ", bd=1)
+clientPipeNameFrame.grid(row=0, column=1, sticky="e")
+clientPipeNameLabel = tk.Label(clientPipeNameFrame, text=testServerName)
+clientPipeNameLabel.pack()
 
 root.protocol("WM_DELETE_WINDOW", on_close)
 # Start the event loop
