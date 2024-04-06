@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import simpledialog
+import enum
 from named_pipe_processing import (
     pipe_client,
     create_pipe,
@@ -10,7 +11,12 @@ from named_pipe_processing import (
 import threading
 
 
-class PipeClientUI:
+class ClientState(enum.Enum):
+    STOPPED = 0
+    RUNNING = 1
+
+
+class SendPipeUI:
     def __init__(self, root: tk.Tk, sendPipeName: str, sendPipeMessageCallback):
         self.root = root
         self.sendPipeName = sendPipeName  # The name of the pipe to send messages to
@@ -34,7 +40,7 @@ class PipeClientUI:
         self.sendMessageButton = tk.Button(
             self.sendPipeMessageLabelFrame,
             text="Send Message",
-            command=self.send_server_entry,
+            command=self.send_pipe_message,
         )
 
         self.sendMessageButton.pack()
@@ -67,13 +73,63 @@ class PipeClientUI:
             self.sendPipeName = new_name
             self.sendPipeNameLabel.config(text=self.sendPipeName)
 
+    def send_pipe_message(self):
+        message = self.serverEntry.get()
+        self.sendPipeMessageCallback(message)
+        self.serverEntry.delete(0, tk.END)
 
-startClientText = "Start Client"
-stopClientTtext = "Stop Client"
+
+class PipeClientUI:
+    def __init__(self, root: tk.Tk, clientPipeName: str, togglePipeClientCallback):
+        self.root = root
+        self.clientPipeName = clientPipeName
+        self.togglePipeClientCallback = togglePipeClientCallback
+        self.startClientText = "Start Client"
+        self.stopClientTtext = "Stop Client"
+        self.msgReceived = ""
+        self.setup_ui()
+
+    def setup_ui(self):
+        # Create a clientMessageFrame for the send message button and the server entry
+        self.clientMessageFrame = tk.Frame(self.root)
+        self.clientMessageFrame.pack()
+        # Add space between column 0 and column 1
+        self.clientMessageFrame.grid_columnconfigure(0, minsize=200)
+
+        self.toggleClientButton = tk.Button(
+            self.clientMessageFrame,
+            text=self.startClientText,
+            command=self.toggle_pipe_client,
+        )
+        self.toggleClientButton.grid(row=0, column=0, sticky="w")
+
+        self.msgReceived = tk.Message(
+            self.clientMessageFrame, width=190, bg="white", fg="black", relief=tk.SUNKEN
+        )
+        self.msgReceived.grid(row=1, column=0, sticky="w")
+
+        self.clientPipeNameFrame = tk.LabelFrame(
+            self.clientMessageFrame, text="Client Pipe Name: ", bd=1
+        )
+        self.clientPipeNameFrame.grid(row=0, column=1, sticky="e")
+        self.clientPipeNameLabel = tk.Label(
+            self.clientPipeNameFrame, text=self.clientPipeName
+        )
+        self.clientPipeNameLabel.pack()
+
+    def toggle_pipe_client(self):
+        new_state = self.togglePipeClientCallback(self.client_callback)
+        if new_state == ClientState.RUNNING:
+            self.toggleClientButton.config(text=self.stopClientTtext)
+        else:
+            self.toggleClientButton.config(text=self.startClientText)
+
+    def client_callback(self, response: str):
+        self.msgReceived.config(text=response)
+
 
 stopClient = threading.Event()
 clientThread = None
-clientPipeName = testServerName
 dataReceived = ""
 serverCreated = False
 
@@ -88,7 +144,6 @@ def create_pipe_entity():
         print("pipe created")
     else:
         print("pipe not created")
-        # exit(1)
 
 
 def stop_pipe_client():
@@ -125,35 +180,26 @@ def send_pipe_message(message: str):
     send_message(message)
 
 
-def toggle_pipe_client():
+def toggle_pipe_client(clientCallback) -> ClientState:
     if not serverCreated:
         create_pipe_entity()
 
     global clientThread
     global stopClient
-    global startClientText
-    global stopClientTtext
-    global toggleClientButton
     if clientThread is None:
         clientThread = threading.Thread(
             target=pipe_client,
             args=(
                 stopClient,
-                client_callback,
+                clientCallback,
             ),
         )
         print("Starting client thread")
         clientThread.start()
-        toggleClientButton.config(text=stopClientTtext)
+        return ClientState.RUNNING
     else:
         stop_pipe_client()
-        toggleClientButton.config(text=startClientText)
-
-
-def client_callback(response: str):
-    global dataReceived
-    dataReceived += response
-    msgReceived.config(text=dataReceived)
+        return ClientState.STOPPED
 
 
 # Create the main window
@@ -161,28 +207,8 @@ root = tk.Tk()
 root.title("Named Pipe Test Utility")
 root.geometry("400x400")
 
-sendPipeUi = PipeClientUI(root, testServerName, send_pipe_message)
-
-# Create a clientMessageFrame for the send message button and the server entry
-clientMessageFrame = tk.Frame(root)
-clientMessageFrame.pack()
-# Add space between column 0 and column 1
-clientMessageFrame.grid_columnconfigure(0, minsize=200)
-# Add toggle client button
-toggleClientButton = tk.Button(
-    clientMessageFrame, text=startClientText, command=toggle_pipe_client
-)
-toggleClientButton.grid(row=0, column=0, sticky="w")
-
-msgReceived = tk.Message(
-    clientMessageFrame, width=190, bg="white", fg="black", relief=tk.SUNKEN
-)
-msgReceived.grid(row=1, column=0, sticky="w")
-
-clientPipeNameFrame = tk.LabelFrame(clientMessageFrame, text="Client Pipe Name: ", bd=1)
-clientPipeNameFrame.grid(row=0, column=1, sticky="e")
-clientPipeNameLabel = tk.Label(clientPipeNameFrame, text=testServerName)
-clientPipeNameLabel.pack()
+sendPipeUi = SendPipeUI(root, testServerName, send_pipe_message)
+clientPipeUi = PipeClientUI(root, testServerName, toggle_pipe_client)
 
 root.protocol("WM_DELETE_WINDOW", on_close)
 # Start the event loop
