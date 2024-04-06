@@ -9,6 +9,65 @@ from named_pipe_processing import (
 )
 import threading
 
+
+class PipeClientUI:
+    def __init__(self, root: tk.Tk, sendPipeName: str, sendPipeMessageCallback):
+        self.root = root
+        self.sendPipeName = sendPipeName  # The name of the pipe to send messages to
+        self.sendPipeMessageCallback = (
+            sendPipeMessageCallback  # The callback to send messages to the pipe
+        )
+        self.setup_ui()
+
+    def setup_ui(self):
+        # Create a sendMessageFrame for the send message button and the server entry
+        self.sendMessageFrame = tk.Frame(self.root)
+        self.sendMessageFrame.pack()
+        # Add space between column 0 and column 1
+        self.sendMessageFrame.grid_columnconfigure(0, minsize=200)
+
+        self.sendPipeMessageLabelFrame = tk.LabelFrame(
+            self.sendMessageFrame, text="Send Pipe Message: ", bd=1
+        )
+        self.sendPipeMessageLabelFrame.grid(row=0, column=0, sticky="w")
+
+        self.sendMessageButton = tk.Button(
+            self.sendPipeMessageLabelFrame,
+            text="Send Message",
+            command=self.send_server_entry,
+        )
+
+        self.sendMessageButton.pack()
+
+        self.serverEntry = tk.Entry(self.sendPipeMessageLabelFrame)
+        self.serverEntry.pack()
+
+        self.sendPipeNameLabelFrame = tk.LabelFrame(
+            self.sendMessageFrame, text="Send Pipe Name: ", bd=1
+        )
+        self.sendPipeNameLabelFrame.grid(row=0, column=1, sticky="e")
+
+        self.sendPipeNameLabel = tk.Label(
+            self.sendPipeNameLabelFrame, text=self.sendPipeName
+        )
+        self.sendPipeNameLabel.pack()
+
+        self.changePipeNameButton = tk.Button(
+            self.sendPipeNameLabelFrame,
+            text="Set Pipe Name",
+            command=self.set_send_pipe_name,
+        )
+        self.changePipeNameButton.pack()
+
+    def set_send_pipe_name(self):
+        new_name = simpledialog.askstring("Input", "Enter the new pipe name:")
+        if new_name is not None:  # If the user didn't cancel the dialog
+            # TODO: Add validation for the pipe name
+            # TODO: Add callback to update the pipe name
+            self.sendPipeName = new_name
+            self.sendPipeNameLabel.config(text=self.sendPipeName)
+
+
 startClientText = "Start Client"
 stopClientTtext = "Stop Client"
 
@@ -17,16 +76,6 @@ clientThread = None
 clientPipeName = testServerName
 dataReceived = ""
 serverCreated = False
-
-sendPipeName = testServerName
-
-
-def set_send_pipe_name():
-    global sendPipeName
-    new_name = simpledialog.askstring("Input", "Enter the new pipe name:")
-    if new_name is not None:  # If the user didn't cancel the dialog
-        sendPipeName = new_name
-        sendPipeNameLabel.config(text=sendPipeName)
 
 
 def create_pipe_entity():
@@ -76,11 +125,6 @@ def send_pipe_message(message: str):
     send_message(message)
 
 
-def send_server_entry():
-    send_pipe_message(serverEntry.get())
-    serverEntry.delete(0, "end")
-
-
 def toggle_pipe_client():
     if not serverCreated:
         create_pipe_entity()
@@ -117,34 +161,7 @@ root = tk.Tk()
 root.title("Named Pipe Test Utility")
 root.geometry("400x400")
 
-# Create a sendMessageFrame for the send message button and the server entry
-sendMessageFrame = tk.Frame(root)
-sendMessageFrame.pack()
-# Add space between column 0 and column 1
-sendMessageFrame.grid_columnconfigure(0, minsize=200)
-
-sendPipeMessageLabelFrame = tk.LabelFrame(
-    sendMessageFrame, text="Send Pipe Message: ", bd=1
-)
-sendPipeMessageLabelFrame.grid(row=0, column=0, sticky="w")
-
-sendMessageButton = tk.Button(
-    sendPipeMessageLabelFrame, text="Send Message", command=send_server_entry
-)
-
-sendMessageButton.pack()
-serverEntry = tk.Entry(sendPipeMessageLabelFrame)
-serverEntry.pack()
-
-sendPipeNameLabelFrame = tk.LabelFrame(sendMessageFrame, text="Send Pipe Name: ", bd=1)
-sendPipeNameLabelFrame.grid(row=0, column=1, sticky="e")
-sendPipeNameLabel = tk.Label(sendPipeNameLabelFrame, text=testServerName)
-sendPipeNameLabel.pack()
-
-changePipeNameButton = tk.Button(
-    sendPipeNameLabelFrame, text="Set Pipe Name", command=set_send_pipe_name
-)
-changePipeNameButton.pack()
+sendPipeUi = PipeClientUI(root, testServerName, send_pipe_message)
 
 # Create a clientMessageFrame for the send message button and the server entry
 clientMessageFrame = tk.Frame(root)
