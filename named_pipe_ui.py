@@ -70,6 +70,7 @@ class SendPipeUI:
         if new_name is not None:  # If the user didn't cancel the dialog
             # TODO: Add validation for the pipe name
             # TODO: Add callback to update the pipe name
+            # TODO: Disable button if the server is running
             self.sendPipeName = new_name
             self.sendPipeNameLabel.config(text=self.sendPipeName)
 
@@ -116,6 +117,22 @@ class PipeClientUI:
             self.clientPipeNameFrame, text=self.clientPipeName
         )
         self.clientPipeNameLabel.pack()
+
+        self.changePipeNameButton = tk.Button(
+            self.clientPipeNameFrame,
+            text="Set Pipe Name",
+            command=self.set_client_pipe_name,
+        )
+        self.changePipeNameButton.pack()
+
+    def set_client_pipe_name(self):
+        new_name = simpledialog.askstring("Input", "Enter the new pipe name:")
+        if new_name is not None:  # If the user didn't cancel the dialog
+            # TODO: Add validation for the pipe name
+            # TODO: Add callback to update the pipe name
+            # TODO: Disable button if the client is running
+            self.clientPipeName = new_name
+            self.clientPipeNameLabel.config(text=self.clientPipeName)
 
     def toggle_pipe_client(self):
         new_state = self.togglePipeClientCallback(self.client_callback)
