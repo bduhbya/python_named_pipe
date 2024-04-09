@@ -6,42 +6,49 @@ from typing import Callable
 
 ClientCallbackType = Callable[[str], None]
 
-pipeName = None
-namedPipe = None
-testServerName = r'\\.\pipe\Foo'
+serverPipeName = None
+serverNamedPipe = None
 
-def create_pipe(pipe_name):
-    global pipeName
-    global namedPipe
-    pipeName = pipe_name
+clientPipeName = None
+clientNamedPipe = None
+
+testServerName = r"\\.\pipe\Foo"
+
+
+def create_server_pipe(pipeName):
     namedPipe = win32pipe.CreateNamedPipe(
         pipeName,
         win32pipe.PIPE_ACCESS_DUPLEX,
-        win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
-        1, 65536, 65536,
+        win32pipe.PIPE_TYPE_MESSAGE
+        | win32pipe.PIPE_READMODE_MESSAGE
+        | win32pipe.PIPE_WAIT,
+        1,
+        65536,
+        65536,
         0,
-        None)
+        None,
+    )
     if namedPipe is None:
         print(f"Failed to create named pipe {pipeName}")
-        return False
     print(f"Named pipe {pipeName} created")
-    return True
+    return namedPipe
 
-def close_pipe():
-    global namedPipe
+
+def close_pipe(namedPipe, pipeName: str):
     if namedPipe is not None:
         win32file.CloseHandle(namedPipe)
         namedPipe = None
         print(f"Named pipe {pipeName} closed")
 
+
 def pipe_server_test():
     print("pipe_server_test")
-    global namedPipe
-    global pipeName
+    global serverPipeName
+    global serverNamedPipe
     count = 0
     try:
-        print("waiting for client to connect pipe: " + pipeName)
-        win32pipe.ConnectNamedPipe(namedPipe, None)
+        print("waiting for client to connect pipe: " + serverPipeName)
+        win32pipe.ConnectNamedPipe(serverNamedPipe, None)
         print("got client")
 
         while count < 10:
@@ -51,23 +58,46 @@ def pipe_server_test():
 
         print("finished now")
     finally:
-        close_pipe()
+        close_pipe(serverNamedPipe, serverPipeName)
+
 
 def send_message(message: str):
-    if namedPipe is None:
+    if serverNamedPipe is None:
         print("no pipe")
         return
 
     try:
-        print("sending message {message}")
+        print(f"sending message {message}")
         # convert to bytes
         pipeData = str.encode(message)
-        win32file.WriteFile(namedPipe, pipeData)
+        win32file.WriteFile(serverNamedPipe, pipeData)
         print("Message sent")
     except pywintypes.error as e:
         print(f"Error: {e}")
     finally:
         print("finally")
+
+
+def create_client_pipe(pipeName):
+    print(f"create_client_pipe: {pipeName}")
+    handle = win32file.CreateFile(
+        pipeName,
+        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+        0,
+        None,
+        win32file.OPEN_EXISTING,
+        0,
+        None,
+    )
+    res = win32pipe.SetNamedPipeHandleState(
+        handle, win32pipe.PIPE_READMODE_MESSAGE, None, None
+    )
+    print(f"SetNamedPipeHandleState return code: {res}")
+    if res == None:
+        return handle
+    win32file.CloseHandle(handle)
+    return None
+
 
 def pipe_client(stop_event, callback: ClientCallbackType):
     print("pipe client")
@@ -76,31 +106,18 @@ def pipe_client(stop_event, callback: ClientCallbackType):
         print("stop_event is None")
         return
 
-    if namedPipe is None:
+    if clientNamedPipe is None:
         print("no pipe")
         return
 
     while not quit and not stop_event.is_set():
         try:
-            handle = win32file.CreateFile(
-                pipeName,
-                win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-                0,
-                None,
-                win32file.OPEN_EXISTING,
-                0,
-                None
-            )
-            res = win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
-            if res == 0:
-                print(f"SetNamedPipeHandleState return code: {res}")
-            
             while True and not stop_event.is_set():
-                _, available, _ = win32pipe.PeekNamedPipe(handle, 0)
+                _, available, _ = win32pipe.PeekNamedPipe(clientNamedPipe, 0)
                 if available:
-                    resp = win32file.ReadFile(handle, 64*1024)
+                    resp = win32file.ReadFile(clientNamedPipe, 64 * 1024)
                     if callback is not None:
-                        callback(str(resp[1], 'utf-8'))
+                        callback(str(resp[1], "utf-8"))
                     print(f"message: {resp}")
                 else:
                     time.sleep(1)  # Sleep for a short time to prevent busy waiting
@@ -113,19 +130,33 @@ def pipe_client(stop_event, callback: ClientCallbackType):
                 quit = True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     stop_event = threading.Event()
-    if create_pipe(testServerName):
-        print("pipe created")
+    serverNamedPipe = create_server_pipe(testServerName)
+    if serverNamedPipe is not None:
+        serverPipeName = testServerName
+        print("server pipe created")
     else:
-        print("pipe not created")
+        print("server pipe not created")
         exit(1)
 
-    if len(sys.argv) < 2:
-        print("need s or c as argument")
-    elif sys.argv[1] == "s":
-        pipe_server_test()
-    elif sys.argv[1] == "c":
-        pipe_client(stop_event=stop_event)
+    clientNamedPipe = create_client_pipe(testServerName)
+    if clientNamedPipe is not None:
+        clientPipeName = testServerName
+        print("client pipe created")
     else:
-        print(f"no can do: {sys.argv[1]}")
+        print("client pipe not created")
+        exit(1)
+
+    clientThread = threading.Thread(
+        target=pipe_client,
+        args=(
+            stop_event,
+            None,
+        ),
+    )
+    print("Starting client thread")
+    clientThread.start()
+    pipe_server_test()
+    stop_event.set()
+    clientThread.join()
