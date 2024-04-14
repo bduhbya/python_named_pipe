@@ -3,18 +3,23 @@ import sys
 import win32pipe, win32file, pywintypes
 import threading
 from typing import Callable
+from enum import Enum
 
 ClientCallbackType = Callable[[str], None]
-# TODO: Only use one pipe for both client and server
 
-serverPipeName = None
+globalPipeName = None
 serverNamedPipe = None
 
-clientPipeName = None
-clientNamedPipe = None
-clientNamedPipeHandle = None
+readPipeHandle = None
 
 testServerName = r"\\.\pipe\Foo"
+
+
+class PipeCreationResult(Enum):
+    SUCCESS = 1
+    FAILURE = 2
+    ALREADY_EXISTS = 3
+    DOES_NOT_EXIST = 4
 
 
 def create_pipe(pipeName, source):
@@ -43,12 +48,6 @@ def create_pipe(pipeName, source):
 
 
 def create_server_pipe(pipeName):
-    # namedPipe = get_read_pipe_handle(pipeName, "create_server_pipe")
-
-    # if namedPipe is not None:
-    #     print(f"create_server_pipe, Named pipe {pipeName} read handle didn't exist.")
-    #     win32file.CloseHandle(namedPipe)
-
     namedPipe = create_pipe(pipeName, "create_server_pipe")
     if namedPipe is None:
         print(f"create_server_pipe, Failed to create named pipe {pipeName}")
@@ -67,12 +66,12 @@ def close_pipe(namedPipe, pipeName: str):
 
 def pipe_server_test(wait_for_client=False):
     print("pipe_server_test")
-    global serverPipeName
+    global globalPipeName
     global serverNamedPipe
     count = 0
     try:
         if wait_for_client:
-            print("waiting for client to connect pipe: " + serverPipeName)
+            print("waiting for client to connect pipe: " + globalPipeName)
             win32pipe.ConnectNamedPipe(serverNamedPipe, None)
             print("got client")
 
@@ -83,7 +82,7 @@ def pipe_server_test(wait_for_client=False):
 
         print("finished now")
     finally:
-        close_pipe(serverNamedPipe, serverPipeName)
+        close_pipe(serverNamedPipe, globalPipeName)
 
 
 def send_message(message: str):
@@ -105,6 +104,7 @@ def send_message(message: str):
 
 def get_read_pipe_handle(pipeName, source):
     print(f"get_read_pipe_handle, source: {source}, name: {pipeName}")
+    returnArray = [PipeCreationResult.SUCCESS, None]
     try:
         handle = win32file.CreateFile(
             pipeName,
@@ -118,35 +118,33 @@ def get_read_pipe_handle(pipeName, source):
     except pywintypes.error as e:
         if e.winerror == 2:
             print(f"get_read_pipe_handle, Named pipe {pipeName} not found")
-            handle = None
+            returnArray[0] = PipeCreationResult.DOES_NOT_EXIST
         else:
             print(f"get_read_pipe_handle, Failed to open pipe: {e}")
-            handle = None
+            returnArray[0] = PipeCreationResult.FAILURE
 
-    if handle is not None:
-        print(f"get_read_pipe_handle, opened read handle for {pipeName}")
+    returnArray[1] = handle
 
-    return handle
+    return returnArray
 
 
-# TODO: Call from client and wait for pipe to be created
-def create_client_pipe(pipeName):
+def create_client_pipe(pipeName, stopEvent):
     print(f"create_client_pipe: {pipeName}")
-    handle = get_read_pipe_handle(pipeName, "create_client_pipe")
+    while True:
+        result = get_read_pipe_handle(pipeName, "create_client_pipe")
+        if (
+            result[0] == PipeCreationResult.SUCCESS
+            or result[0] == PipeCreationResult.FAILURE
+            or stopEvent.is_set()
+        ):
+            break
+        time.sleep(1)
 
-    if handle is None:
-        print(f"pipe {pipeName} doesn't exist, creating it")
-        global clientNamedPipeHandle
-        clientNamedPipeHandle = create_pipe(pipeName, "create_client_pipe")
-        handle = get_read_pipe_handle(
-            pipeName, "create_client_pipe after initial creation"
-        )
-
-    if handle is None:
+    if result[1] is None or result[0] == PipeCreationResult.FAILURE:
         print(f"Failed to create pipe {pipeName}")
-        close_client_pipe()
         return None
 
+    handle = result[1]
     try:
         res = win32pipe.SetNamedPipeHandleState(
             handle,
@@ -157,53 +155,39 @@ def create_client_pipe(pipeName):
         )
     except pywintypes.error as e:
         print(f"SetNamedPipeHandleState error: {e}")
-        close_client_pipe()
         return None
 
-    # print(f"SetNamedPipeHandleState return code: {res}")
-    # if res == None:
     return handle
-
-    # print(f"Failed to set pipe handle state, closing handle {handle}")
-    # close_client_pipe()
-    # return None
 
 
 def close_client_pipe():
-    global clientNamedPipe
-    global clientPipeName
-    global clientNamedPipeHandle
-    if clientNamedPipe is not None:
-        win32file.CloseHandle(clientNamedPipe)
-        clientNamedPipe = None
-        print(f"Named pipe {clientPipeName} closed")
-
-    if clientPipeName is not None:
-        clientPipeName = None
-
-    if clientNamedPipeHandle is not None:
-        win32file.CloseHandle(clientNamedPipeHandle)
-        clientNamedPipeHandle = None
-        print(f"Named pipe handle closed")
+    global readPipeHandle
+    if readPipeHandle is not None:
+        win32file.CloseHandle(readPipeHandle)
+        readPipeHandle = None
+        print(f"Read pipe hanldle {globalPipeName} closed")
 
 
-def pipe_client(stop_event, callback: ClientCallbackType):
+def pipe_client(pipeName, stop_event, callback: ClientCallbackType):
     print("pipe client")
     quit = False
     if stop_event is None:
         print("stop_event is None")
         return
 
-    if clientNamedPipe is None:
-        print("no pipe")
+    # TODO: move handle creation to loop
+    global readPipeHandle
+    readPipeHandle = create_client_pipe(pipeName, stop_event)
+    if readPipeHandle is None:
+        print("no pipe, exiting client thread")
         return
 
     while not quit and not stop_event.is_set():
         try:
             while True and not stop_event.is_set():
-                _, available, _ = win32pipe.PeekNamedPipe(clientNamedPipe, 0)
+                _, available, _ = win32pipe.PeekNamedPipe(readPipeHandle, 0)
                 if available:
-                    resp = win32file.ReadFile(clientNamedPipe, 64 * 1024)
+                    resp = win32file.ReadFile(readPipeHandle, 64 * 1024)
                     if callback is not None:
                         callback(str(resp[1], "utf-8"))
                     print(f"message: {resp}")
@@ -212,7 +196,6 @@ def pipe_client(stop_event, callback: ClientCallbackType):
                     time.sleep(1)  # Sleep for a short time to prevent busy waiting
             print("stopping client")
             quit = True
-            # win32file.CloseHandle(clientNamedPipe)
         except pywintypes.error as e:
             if e.args[0] == 2:
                 print("no pipe, trying again in a sec")
@@ -220,6 +203,7 @@ def pipe_client(stop_event, callback: ClientCallbackType):
             elif e.args[0] == 109:
                 print("broken pipe, bye bye")
                 quit = True
+    close_client_pipe()
 
 
 def stop_client_thread(clientThread, stop_event):
@@ -231,30 +215,21 @@ def stop_client_thread(clientThread, stop_event):
 
 
 def run_server_first_loopback():
-    global serverPipeName
+    global globalPipeName
     global serverNamedPipe
-    global clientPipeName
-    global clientNamedPipe
     stop_event = threading.Event()
     serverNamedPipe = create_server_pipe(testServerName)
     if serverNamedPipe is not None:
-        serverPipeName = testServerName
+        globalPipeName = testServerName
         print("server pipe created")
     else:
         print("server pipe not created")
         exit(1)
 
-    clientNamedPipe = create_client_pipe(testServerName)
-    if clientNamedPipe is not None:
-        clientPipeName = testServerName
-        print("client pipe created")
-    else:
-        print("client pipe not created")
-        exit(1)
-
     clientThread = threading.Thread(
         target=pipe_client,
         args=(
+            testServerName,
             stop_event,
             None,
         ),
@@ -266,22 +241,14 @@ def run_server_first_loopback():
 
 
 def run_client_first_loopback():
-    global serverPipeName
+    global globalPipeName
     global serverNamedPipe
-    global clientPipeName
-    global clientNamedPipe
     stop_event = threading.Event()
-    clientNamedPipe = create_client_pipe(testServerName)
-    if clientNamedPipe is not None:
-        clientPipeName = testServerName
-        print("client pipe created")
-    else:
-        print("client pipe not created")
-        exit(1)
 
     clientThread = threading.Thread(
         target=pipe_client,
         args=(
+            testServerName,
             stop_event,
             None,
         ),
@@ -291,7 +258,7 @@ def run_client_first_loopback():
 
     serverNamedPipe = create_server_pipe(testServerName)
     if serverNamedPipe is not None:
-        serverPipeName = testServerName
+        globalPipeName = testServerName
         print("server pipe created")
     else:
         print("server pipe not created")
