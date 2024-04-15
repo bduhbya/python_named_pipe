@@ -31,7 +31,7 @@ def create_pipe(pipeName, source):
             win32pipe.PIPE_TYPE_MESSAGE
             | win32pipe.PIPE_READMODE_MESSAGE
             | win32pipe.PIPE_WAIT,
-            2,
+            1,
             # win32pipe.PIPE_UNLIMITED_INSTANCES,
             65536,
             65536,
@@ -76,7 +76,7 @@ def pipe_server_test(wait_for_client=False):
             print("got client")
 
         while count < 10:
-            send_message(str(count))
+            send_message_internal(str(count))
             time.sleep(1)
             count += 1
 
@@ -85,8 +85,16 @@ def pipe_server_test(wait_for_client=False):
         close_pipe(serverNamedPipe, globalPipeName)
 
 
-def send_message(message: str):
+def send_message_internal(message: str):
     if serverNamedPipe is None:
+        print("send_message_internal, no pipe")
+        return
+
+    send_message(message, serverNamedPipe)
+
+
+def send_message(message: str, pipeHandle):
+    if pipeHandle is None:
         print("send_message, no pipe")
         return
 
@@ -94,7 +102,7 @@ def send_message(message: str):
         print(f"send_message, sending message {message}")
         # convert to bytes
         pipeData = str.encode(message)
-        win32file.WriteFile(serverNamedPipe, pipeData)
+        win32file.WriteFile(pipeHandle, pipeData)
         print("Message sent")
     except pywintypes.error as e:
         print(f"Error: {e}")
@@ -104,6 +112,7 @@ def send_message(message: str):
 
 def get_read_pipe_handle(pipeName, source):
     print(f"get_read_pipe_handle, source: {source}, name: {pipeName}")
+    handle = None
     returnArray = [PipeCreationResult.SUCCESS, None]
     try:
         handle = win32file.CreateFile(

@@ -17,12 +17,19 @@ class ClientState(enum.Enum):
 
 
 class SendPipeUI:
-    def __init__(self, root: tk.Tk, sendPipeName: str, sendPipeMessageCallback):
+    def __init__(
+        self,
+        root: tk.Tk,
+        sendPipeName: str,
+        sendPipeMessageCallback,
+        changePipeNameCallback,
+    ):
         self.root = root
         self.sendPipeName = sendPipeName  # The name of the pipe to send messages to
         self.sendPipeMessageCallback = (
             sendPipeMessageCallback  # The callback to send messages to the pipe
         )
+        self.changePipeNameCallback = changePipeNameCallback
         self.setup_ui()
 
     def setup_ui(self):
@@ -66,12 +73,15 @@ class SendPipeUI:
         self.changePipeNameButton.pack()
 
     def set_send_pipe_name(self):
-        new_name = simpledialog.askstring("Input", "Enter the new pipe name:")
+        new_name = simpledialog.askstring(
+            "Input", "Enter the new pipe name:", initialvalue=self.sendPipeName
+        )
         if new_name is not None:  # If the user didn't cancel the dialog
             # TODO: Add validation for the pipe name
             # TODO: Add callback to update the pipe name
             # TODO: Disable button if the server is running
             self.sendPipeName = new_name
+            self.changePipeNameCallback(new_name)
             self.sendPipeNameLabel.config(text=self.sendPipeName)
 
     def send_pipe_message(self):
@@ -149,15 +159,33 @@ stopClient = threading.Event()
 clientThread = None
 dataReceived = ""
 serverCreated = False
+pipeHandle = None
+pipeName = testServerName
+
+
+def change_pipe_name(newName: str):
+    global pipeName
+    global pipeHandle
+    if pipeHandle is not None:
+        close_pipe(pipeHandle, pipeName)
+        pipeHandle = None
+
+    if clientThread is not None:
+        clientPipeUi.toggle_pipe_client()
+
+    pipeName = newName
 
 
 def create_pipe_entity():
     global serverCreated
-    if serverCreated:
+    global pipeHandle
+    if pipeHandle is not None:
+        print(f"Pipe {pipeName} already created")
         return
-    serverCreated = create_pipe(testServerName)
+
+    pipeHandle = create_pipe(pipeName, "create_pipe_entity")
     print("Creating server")
-    if serverCreated:
+    if pipeHandle is not None:
         print("pipe created")
     else:
         print("pipe not created")
@@ -175,9 +203,9 @@ def stop_pipe_client():
 
 def on_close():
     print("Closing window")
-    if serverCreated:
-        send_message("exit")
-        close_pipe()
+    if pipeHandle is not None:
+        send_message("exit", pipeHandle)
+        close_pipe(pipeHandle, pipeName)
 
     if clientThread is not None:
         stop_pipe_client()
@@ -194,19 +222,18 @@ def send_pipe_message(message: str):
         return
 
     print("Sending message to pipe: " + message)
-    send_message(message)
+    send_message(message, pipeHandle)
 
 
 def toggle_pipe_client(clientCallback) -> ClientState:
-    if not serverCreated:
-        create_pipe_entity()
-
     global clientThread
     global stopClient
+    stopClient.clear()
     if clientThread is None:
         clientThread = threading.Thread(
             target=pipe_client,
             args=(
+                pipeName,
                 stopClient,
                 clientCallback,
             ),
@@ -224,7 +251,7 @@ root = tk.Tk()
 root.title("Named Pipe Test Utility")
 root.geometry("400x400")
 
-sendPipeUi = SendPipeUI(root, testServerName, send_pipe_message)
+sendPipeUi = SendPipeUI(root, testServerName, send_pipe_message, change_pipe_name)
 clientPipeUi = PipeClientUI(root, testServerName, toggle_pipe_client)
 
 root.protocol("WM_DELETE_WINDOW", on_close)
