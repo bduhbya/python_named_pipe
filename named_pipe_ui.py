@@ -15,6 +15,10 @@ class ClientState(enum.Enum):
     STOPPED = 0
     RUNNING = 1
 
+class ServerState(enum.Enum):
+    STOPPED = 0
+    RUNNING = 1
+
 
 class SendPipeUI:
     def __init__(
@@ -23,6 +27,7 @@ class SendPipeUI:
         sendPipeName: str,
         sendPipeMessageCallback,
         changePipeNameCallback,
+        toggleServerPipeConnection,
     ):
         self.root = root
         self.sendPipeName = sendPipeName  # The name of the pipe to send messages to
@@ -30,6 +35,7 @@ class SendPipeUI:
             sendPipeMessageCallback  # The callback to send messages to the pipe
         )
         self.changePipeNameCallback = changePipeNameCallback
+        self.toggleServerPipeConnection = toggleServerPipeConnection
         self.setup_ui()
 
     def setup_ui(self):
@@ -51,6 +57,8 @@ class SendPipeUI:
         )
 
         self.sendMessageButton.pack()
+        # Disable button until server is connected
+        self.sendMessageButton.config(state=tk.DISABLED)
 
         self.serverEntry = tk.Entry(self.sendPipeMessageLabelFrame)
         self.serverEntry.pack()
@@ -59,6 +67,13 @@ class SendPipeUI:
             self.sendMessageFrame, text="Send Pipe Name: ", bd=1
         )
         self.sendPipeNameLabelFrame.grid(row=0, column=1, sticky="e")
+
+        self.connectDisconnectPipeButton = tk.Button(
+            self.sendPipeNameLabelFrame,
+            text="Connect Pipe",
+            command=self.toggle_connect_pipe,
+        )
+        self.connectDisconnectPipeButton.pack()
 
         self.sendPipeNameLabel = tk.Label(
             self.sendPipeNameLabelFrame, text=self.sendPipeName
@@ -88,6 +103,12 @@ class SendPipeUI:
         message = self.serverEntry.get()
         self.sendPipeMessageCallback(message)
         self.serverEntry.delete(0, tk.END)
+
+    def toggle_connect_pipe(self):
+        new_state = self.toggleServerPipeConnection()
+        print(f"toggle_connect_pipe, New state: {new_state}")
+        self.connectDisconnectPipeButton.config(text="Disconnect Pipe" if new_state == ServerState.RUNNING else "Connect Pipe")
+        self.sendMessageButton.config(state=tk.NORMAL if new_state == ServerState.RUNNING else tk.DISABLED)
 
 
 class PipeClientUI:
@@ -175,6 +196,19 @@ def change_pipe_name(newName: str):
 
     pipeName = newName
 
+def toggle_server_pipe_connection():
+    global pipeName
+    global pipeHandle
+    global serverCreated
+    if pipeHandle:
+        print("closing pipe")
+        close_pipe(pipeHandle, pipeName)
+        pipeHandle = None
+    else:
+        print("Creating pipe")
+        create_pipe_entity()
+    
+    return ServerState.RUNNING if pipeHandle is not None else ServerState.STOPPED
 
 def create_pipe_entity():
     global serverCreated
@@ -251,7 +285,7 @@ root = tk.Tk()
 root.title("Named Pipe Test Utility")
 root.geometry("400x400")
 
-sendPipeUi = SendPipeUI(root, testServerName, send_pipe_message, change_pipe_name)
+sendPipeUi = SendPipeUI(root, testServerName, send_pipe_message, change_pipe_name, toggle_server_pipe_connection)
 clientPipeUi = PipeClientUI(root, testServerName, toggle_pipe_client)
 
 root.protocol("WM_DELETE_WINDOW", on_close)

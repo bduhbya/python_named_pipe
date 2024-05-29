@@ -27,12 +27,12 @@ def create_pipe(pipeName, source):
     try:
         namedPipe = win32pipe.CreateNamedPipe(
             pipeName,
-            win32pipe.PIPE_ACCESS_DUPLEX,  # | win32pipe.PIPE_UNLIMITED_INSTANCES,
+            win32pipe.PIPE_ACCESS_DUPLEX,
             win32pipe.PIPE_TYPE_MESSAGE
             | win32pipe.PIPE_READMODE_MESSAGE
             | win32pipe.PIPE_WAIT,
-            1,
-            # win32pipe.PIPE_UNLIMITED_INSTANCES,
+            # 1,
+            win32pipe.PIPE_UNLIMITED_INSTANCES,
             65536,
             65536,
             0,
