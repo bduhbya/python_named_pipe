@@ -5,7 +5,7 @@ import threading
 from typing import Callable
 from enum import Enum
 
-ClientCallbackType = Callable[[str], None]
+MessageCallbackType = Callable[[str], None]
 
 globalPipeName = None
 serverNamedPipe = None
@@ -56,6 +56,28 @@ def create_server_pipe(pipeName):
 
     return namedPipe
 
+# def listen_for_messages(namedPipe, stop_event, callback: MessageCallbackType):
+def listen_for_server_messages(namedPipe, callback: MessageCallbackType):
+    # while not stop_event.is_set():
+    while True:
+        try:
+            result, data = win32file.ReadFile(namedPipe, 64*1024)
+        except pywintypes.error as e:
+            if e.winerror == 536:  # ERROR_PIPE_NOT_CONNECTED
+                time.sleep(1)
+                continue
+
+            print(f"ReadFile failed: {e}")
+            break
+
+        if result == 0:
+            message = data.decode()
+            print(f"Message received: {message}")
+            if callback is not None:
+                callback(message)
+        else:
+            print(f"ReadFile failed with error code: {result}")
+            break
 
 def close_pipe(namedPipe, pipeName: str):
     if namedPipe is not None:
@@ -177,7 +199,7 @@ def close_client_pipe():
         print(f"Read pipe hanldle {globalPipeName} closed")
 
 
-def pipe_client(pipeName, stop_event, callback: ClientCallbackType):
+def pipe_client(pipeName, stop_event, callback: MessageCallbackType):
     print("pipe client")
     quit = False
     if stop_event is None:

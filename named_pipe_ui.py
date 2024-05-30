@@ -7,6 +7,7 @@ from named_pipe_processing import (
     testServerName,
     send_message,
     close_pipe,
+    listen_for_server_messages,
 )
 import threading
 
@@ -36,6 +37,7 @@ class SendPipeUI:
         )
         self.changePipeNameCallback = changePipeNameCallback
         self.toggleServerPipeConnection = toggleServerPipeConnection
+        self.msgReceived = ""
         self.setup_ui()
 
     def setup_ui(self):
@@ -46,7 +48,7 @@ class SendPipeUI:
         self.sendMessageFrame.grid_columnconfigure(0, minsize=200)
 
         self.sendPipeMessageLabelFrame = tk.LabelFrame(
-            self.sendMessageFrame, text="Send Pipe Message: ", bd=1
+            self.sendMessageFrame, text="Server Pipe: ", bd=1
         )
         self.sendPipeMessageLabelFrame.grid(row=0, column=0, sticky="w")
 
@@ -63,8 +65,16 @@ class SendPipeUI:
         self.serverEntry = tk.Entry(self.sendPipeMessageLabelFrame)
         self.serverEntry.pack()
 
+        self.serverPipeMessagesLabel = tk.Label(self.sendPipeMessageLabelFrame, text="Messages: ")
+        self.serverPipeMessagesLabel.pack()
+
+        self.serverPipeMessages = tk.Message(
+            self.sendPipeMessageLabelFrame, width=190, bg="white", fg="black", relief=tk.SUNKEN
+        )
+        self.serverPipeMessages.pack()
+
         self.sendPipeNameLabelFrame = tk.LabelFrame(
-            self.sendMessageFrame, text="Send Pipe Name: ", bd=1
+            self.sendMessageFrame, text="Server Pipe Name: ", bd=1
         )
         self.sendPipeNameLabelFrame.grid(row=0, column=1, sticky="e")
 
@@ -105,10 +115,14 @@ class SendPipeUI:
         self.serverEntry.delete(0, tk.END)
 
     def toggle_connect_pipe(self):
-        new_state = self.toggleServerPipeConnection()
+        new_state = self.toggleServerPipeConnection(self.update_server_pipe_messages)
         print(f"toggle_connect_pipe, New state: {new_state}")
         self.connectDisconnectPipeButton.config(text="Disconnect Pipe" if new_state == ServerState.RUNNING else "Connect Pipe")
         self.sendMessageButton.config(state=tk.NORMAL if new_state == ServerState.RUNNING else tk.DISABLED)
+
+    def update_server_pipe_messages(self, message: str):
+        self.msgReceived += message + "\n"
+        self.serverPipeMessages.config(text=self.msgReceived)
 
 
 class PipeClientUI:
@@ -178,8 +192,8 @@ class PipeClientUI:
 
 stopClient = threading.Event()
 clientThread = None
+serverThread = None
 dataReceived = ""
-serverCreated = False
 pipeHandle = None
 pipeName = testServerName
 
@@ -196,22 +210,30 @@ def change_pipe_name(newName: str):
 
     pipeName = newName
 
-def toggle_server_pipe_connection():
+def toggle_server_pipe_connection(serverMessageCallback) -> ServerState:
     global pipeName
     global pipeHandle
-    global serverCreated
+    global serverThread
     if pipeHandle:
         print("closing pipe")
         close_pipe(pipeHandle, pipeName)
         pipeHandle = None
+        if serverThread is not None:
+            serverThread.join()
+            serverThread = None
     else:
         print("Creating pipe")
         create_pipe_entity()
+        print("Starting server message receive thread")
+        serverThread = threading.Thread(
+            target=listen_for_server_messages,
+            args=(pipeHandle, serverMessageCallback),
+        )
+        serverThread.start()
     
     return ServerState.RUNNING if pipeHandle is not None else ServerState.STOPPED
 
 def create_pipe_entity():
-    global serverCreated
     global pipeHandle
     if pipeHandle is not None:
         print(f"Pipe {pipeName} already created")
@@ -248,8 +270,9 @@ def on_close():
 
 
 def send_pipe_message(message: str):
-    if not serverCreated:
-        create_pipe_entity()
+    if not pipeHandle:
+        print("Pipe not created")
+        return
 
     if message is None or message == "":
         print("No message to send")
